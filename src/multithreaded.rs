@@ -17,33 +17,34 @@ impl ParallelTableMutIndexTicket {
 
     fn set(self, value: Integer) {
         assert!(self.table.capacity > self.index);
-        // SAFETY: this function is memory safe because each index only gets a single ticket
+        // SAFETY: this function is memory safe because each index only gets a single ticket and other
+        // threads are not allowed to observe this uninitalized memory
         unsafe {
             (*self.table.shared_mem_ptr.as_ptr())[self.index] = Some(value);
         }
 
-        // SAFETY: We require self.table.valid_to + 1 == self.index before we can update
+        // SAFETY: We require self.table.valid_len == self.index before we can update
         // to prevent data races from being visible to the end user from mis-use.
         // For this project, we will panic if such a scenario happens. This will leave the other
         // threads in the threadpool in a deadlock since we don't handle thread panics yet
-        let old_valid = self.table.valid_to.compare_and_swap(self.index - 1, self.index, Ordering::AcqRel);
+        let old_valid = self.table.valid_len.compare_and_swap(self.index, self.index + 1, Ordering::AcqRel);
         // due to the algorithm we use, we can't possibly have a value to store unless we know all values up to the previous one
-        assert_eq!(self.index, old_valid + 1, "Something has gone terribly wrong");
+        assert_eq!(self.index, old_valid, "Something has gone terribly wrong");
     }
 }
 
 #[derive(Debug)]
 pub struct ParallelTable {
     shared_mem_ptr: NonNull<[Option<Integer>]>,
-    valid_to: AtomicUsize,
+    valid_len: AtomicUsize,
     capacity: usize,
     tickets_generated: AtomicBool,
 }
 
-// TODO refactor so we don't confuse ourselves and get more off by one errors in the future (I'm looking at you valid_to and capacity)
 impl ParallelTable {
-    pub fn new(size: usize) -> Self {
-        let mut shared_mem = vec![None; size+1];
+    pub fn new(target_n: usize) -> Self {
+        let capacity = target_n + 1;
+        let mut shared_mem = vec![None; capacity];
 
         shared_mem[0] = Some(Integer::from(1));
         shared_mem[1] = Some(Integer::from(1));
@@ -51,15 +52,15 @@ impl ParallelTable {
 
         Self {
             shared_mem_ptr: NonNull::new(shared_mem.leak()).unwrap(),
-            valid_to: AtomicUsize::new(1),
-            capacity: size+1,
+            valid_len: AtomicUsize::new(2),
+            capacity,
             tickets_generated: AtomicBool::new(false),
         }
     }
 
     pub fn get(&self, index: usize) -> &Option<Integer> {
-        let valid = self.valid_to.load(Ordering::Acquire);
-        if index <= valid {
+        let valid = self.valid_len.load(Ordering::Acquire);
+        if index < valid {
             unsafe {
                 let slice = self.into_slice(valid);
                 &slice[index]
@@ -70,7 +71,7 @@ impl ParallelTable {
     }
 
     pub fn get_all_valid(&self) -> &[Option<Integer>] {
-        let valid = self.valid_to.load(Ordering::Acquire);
+        let valid = self.valid_len.load(Ordering::Acquire);
         unsafe {
             self.into_slice(valid)
         }
@@ -79,7 +80,7 @@ impl ParallelTable {
     /// # SAFETY
     /// This function does not check if size is valid
     unsafe fn into_slice(&self, size: usize) -> &[Option<Integer>] {
-        std::slice::from_raw_parts(self.shared_mem_ptr.as_ptr() as *const _, size + 1)
+        std::slice::from_raw_parts(self.shared_mem_ptr.as_ptr() as *const _, size)
     }
 }
 
