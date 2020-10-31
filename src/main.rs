@@ -44,7 +44,7 @@ pub fn generate_index_subtractions(up_to: usize) -> Vec<(usize, AddOrSub)> {
     part_subs
 }
 
-fn calc_partition_count(n: usize) -> Integer {
+pub fn calc_partition_count(n: usize) -> Integer {
     let index_subtractions = generate_index_subtractions(n);
     let mut index_subtraction_take_count = 2;
 
