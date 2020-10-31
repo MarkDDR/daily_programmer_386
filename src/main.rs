@@ -7,10 +7,10 @@ use rug::Integer;
 use multithreaded::*;
 
 fn main() {
-    let target_n = 666;
+    let target_n = 666_666;
 
-    let answer = calc_partition_count(target_n);
-    println!("serial:   {:?}", answer);
+    // let answer = calc_partition_count(target_n);
+    // println!("serial:   {:?}", answer);
 
     let answer_parallel = calc_partition_count_parallel(target_n);
     println!("parallel: {:?}", answer_parallel);

@@ -1,6 +1,7 @@
 use std::sync::atomic::{AtomicUsize, Ordering, AtomicBool};
 use std::sync::Arc;
 use std::ptr::NonNull;
+use std::mem::MaybeUninit;
 use rug::Integer;
 use crate::{AddOrSub, generate_index_subtractions};
 use threadpool::ThreadPool;
@@ -20,7 +21,7 @@ impl ParallelTableMutIndexTicket {
         // SAFETY: this function is memory safe because each index only gets a single ticket and other
         // threads are not allowed to observe this uninitalized memory
         unsafe {
-            (*self.table.shared_mem_ptr.as_ptr())[self.index] = Some(value);
+            (*self.table.shared_mem_ptr.as_ptr())[self.index] = MaybeUninit::new(value);
         }
 
         // SAFETY: We require self.table.valid_len == self.index before we can update
@@ -35,7 +36,7 @@ impl ParallelTableMutIndexTicket {
 
 #[derive(Debug)]
 pub struct ParallelTable {
-    shared_mem_ptr: NonNull<[Option<Integer>]>,
+    shared_mem_ptr: NonNull<[MaybeUninit<Integer>]>,
     valid_len: AtomicUsize,
     capacity: usize,
     tickets_generated: AtomicBool,
@@ -44,10 +45,10 @@ pub struct ParallelTable {
 impl ParallelTable {
     pub fn new(target_n: usize) -> Self {
         let capacity = target_n + 1;
-        let mut shared_mem = vec![None; capacity];
+        let mut shared_mem: Vec<MaybeUninit<Integer>> = (0..capacity).map(|_| MaybeUninit::uninit()).collect();
 
-        shared_mem[0] = Some(Integer::from(1));
-        shared_mem[1] = Some(Integer::from(1));
+        shared_mem[0] = MaybeUninit::new(Integer::from(1));
+        shared_mem[1] = MaybeUninit::new(Integer::from(1));
 
 
         Self {
@@ -58,43 +59,35 @@ impl ParallelTable {
         }
     }
 
-    pub fn get(&self, index: usize) -> &Option<Integer> {
+    pub fn get(&self, index: usize) -> Option<&Integer> {
         let valid = self.valid_len.load(Ordering::Acquire);
-        if index < valid {
-            unsafe {
-                let slice = self.into_slice(valid);
-                &slice[index]
-            }
-        } else {
-            &None
-        }
+        let slice = unsafe { self.into_slice(valid) };
+        slice.get(index)
     }
 
-    pub fn get_all_valid(&self) -> &[Option<Integer>] {
+    pub fn get_all_valid(&self) -> &[Integer] {
         let valid = self.valid_len.load(Ordering::Acquire);
-        unsafe {
-            self.into_slice(valid)
-        }
+        unsafe { self.into_slice(valid) }
     }
 
     /// # SAFETY
     /// This function does not check if size is valid
-    unsafe fn into_slice(&self, size: usize) -> &[Option<Integer>] {
-        std::slice::from_raw_parts(self.shared_mem_ptr.as_ptr() as *const _, size)
+    unsafe fn into_slice(&self, size: usize) -> &[Integer] {
+        std::slice::from_raw_parts(self.shared_mem_ptr.as_ptr() as *const Integer, size)
     }
 }
 
 unsafe impl Sync for ParallelTable {}
 unsafe impl Send for ParallelTable {}
 
-impl Drop for ParallelTable {
-    fn drop(&mut self) {
-        let boxed_slice: Box<[Option<Integer>]> = unsafe {
-            Box::from_raw(self.shared_mem_ptr.as_ptr())
-        };
-        std::mem::drop(boxed_slice);
-    }
-}
+// impl Drop for ParallelTable {
+//     fn drop(&mut self) {
+//         let boxed_slice: Box<[Option<Integer>]> = unsafe {
+//             Box::from_raw(self.shared_mem_ptr.as_ptr())
+//         };
+//         std::mem::drop(boxed_slice);
+//     }
+// }
 
 pub fn generate_tickets(parallel_table: Arc<ParallelTable>) -> Option<Vec<ParallelTableMutIndexTicket>> {
     let old_value = parallel_table.tickets_generated.compare_and_swap(false, true, Ordering::AcqRel);
@@ -138,7 +131,7 @@ pub fn calc_partition_count_parallel(n: usize) -> Integer {
             for (sub_amount, add_or_sub) in index_sub_slice.iter().rev() {
                 let get_index = ticket.get_index() - sub_amount;
                 let int: &Integer = match part_valid.get(get_index) {
-                    Some(int) => int.as_ref().unwrap(),
+                    Some(int) => int,
                     None => {
                         loop {
                             match partition_count_table.get(get_index) {
@@ -159,5 +152,5 @@ pub fn calc_partition_count_parallel(n: usize) -> Integer {
 
     pool.join();
 
-    partition_count_table.get(n).as_ref().expect("didn't calculate up to n somehow").clone()
+    partition_count_table.get(n).expect("didn't calculate up to n somehow").clone()
 }
