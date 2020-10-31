@@ -54,20 +54,18 @@ fn calc_partition_count(n: usize) -> Integer {
         if index_subtractions.get(index_subtraction_take_count).map(|x| x.0) == Some(index) {
             index_subtraction_take_count += 1;
         }
-        // dbg!(index, index_subtraction_take_count);
         let index_sub_slice = &index_subtractions[0..index_subtraction_take_count];
 
-        let next_partition_count = index_sub_slice.iter()
-            .rev()
-            .map(|(x, add_or_sub)| {
-                match add_or_sub {
-                    AddOrSub::Add => partition_count_table[index - x].clone(),
-                    AddOrSub::Sub => -1 * partition_count_table[index - x].clone(),
-                }
-            })
-            .fold(Integer::from(0), |acc, x| acc + x);
+        let mut partial_sum = Integer::new();
+        for (sub_amt, add_or_sub) in index_sub_slice.iter().rev() {
+            let int = &partition_count_table[index - sub_amt];
+            match add_or_sub {
+                AddOrSub::Add => partial_sum += int,
+                AddOrSub::Sub => partial_sum -= int,
+            }
+        }
 
-        partition_count_table.push(next_partition_count)
+        partition_count_table.push(partial_sum);
     }
 
     partition_count_table[n].clone()

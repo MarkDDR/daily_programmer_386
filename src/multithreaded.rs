@@ -23,6 +23,11 @@ impl ParallelTableMutIndexTicket {
         }
         // We could just use store instead of swap, but I want to include a sanity check on old index
         // self.table.valid_to_store(self.index, Ordering::Release);
+
+        // SAFETY: if this were a library, we would require self.table.valid_to + 1 == self.index
+        // to prevent data races from being visible to the end user from mis-use,
+        // but we know the algorithm we use could never resolve a value without that predicate,
+        // so we shall leave this be
         let old_valid = self.table.valid_to.swap(self.index, Ordering::AcqRel);
         // due to the algorithm we use, we can't possibly have a value to store unless we know all values up to the previous one
         assert_eq!(self.index, old_valid + 1);
@@ -79,6 +84,9 @@ impl ParallelTable {
     }
 }
 
+unsafe impl Sync for ParallelTable {}
+unsafe impl Send for ParallelTable {}
+
 pub fn generate_tickets(parallel_table: Arc<ParallelTable>) -> Option<Vec<ParallelTableMutIndexTicket>> {
     let old_value = parallel_table.tickets_generated.compare_and_swap(false, true, Ordering::AcqRel);
     if !old_value {
@@ -90,9 +98,6 @@ pub fn generate_tickets(parallel_table: Arc<ParallelTable>) -> Option<Vec<Parall
         None
     }
 }
-
-unsafe impl Sync for ParallelTable {}
-unsafe impl Send for ParallelTable {}
 
 pub fn calc_partition_count_parallel(n: usize) -> Integer {
     let index_subtractions = Arc::new(generate_index_subtractions(n));
@@ -145,13 +150,5 @@ pub fn calc_partition_count_parallel(n: usize) -> Integer {
 
     pool.join();
 
-    // just for the debugger
-    // let x = Arc::try_unwrap(partition_counts).expect("poo");
-    // x.get(n).as_ref().expect("didn't calc n").clone()
-
-    // let l = partition_counts.get_all_valid();
-    // for (i, e) in l.iter().enumerate() {
-    //     println!("{}: {}", i, e.as_ref().unwrap());
-    // }
     partition_count_table.get(n).as_ref().expect("didn't calculate up to n somehow").clone()
 }
