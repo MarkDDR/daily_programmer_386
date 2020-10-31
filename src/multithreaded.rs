@@ -2,7 +2,7 @@ use std::sync::atomic::{AtomicUsize, Ordering, AtomicBool};
 use std::sync::Arc;
 use std::ptr::NonNull;
 use rug::Integer;
-use crate::{AddOrSub, gen_partition_subtractions};
+use crate::{AddOrSub, generate_index_subtractions};
 use threadpool::ThreadPool;
 
 pub struct ParallelTableMutIndexTicket {
@@ -95,43 +95,39 @@ unsafe impl Sync for ParallelTable {}
 unsafe impl Send for ParallelTable {}
 
 pub fn calc_partition_count_parallel(n: usize) -> Integer {
-    let partition_subtractions = Arc::new(gen_partition_subtractions(n));
-    let partition_counts = Arc::new(ParallelTable::new(n));
+    let index_subtractions = Arc::new(generate_index_subtractions(n));
+    let partition_count_table = Arc::new(ParallelTable::new(n));
 
-    // TODO use num_cpus to determine number of threads
-    let num_threads = 4;
+    let num_threads = num_cpus::get();
     let pool = ThreadPool::new(num_threads);
 
-    let partition_tickets = generate_tickets(partition_counts.clone()).unwrap();
+    let table_mut_tickets = generate_tickets(partition_count_table.clone()).unwrap();
 
-    for ticket in partition_tickets {
-        let partition_counts = partition_counts.clone();
-        let partition_subtractions = partition_subtractions.clone();
+    for ticket in table_mut_tickets {
+        let partition_count_table = partition_count_table.clone();
+        let index_subtractions = index_subtractions.clone();
 
         pool.execute(move || {
-            // dbg!(ticket.get_index());
-            let mut partition_subtraction_take_count = 2;
-            // for (sub_amt, _) in partition_subtractions.iter() {
+            let mut index_subtraction_take_count = 2;
+            for (i, (sub_amt, _)) in index_subtractions.iter().enumerate().skip(2) {
+                if ticket.get_index() >= *sub_amt {
+                    index_subtraction_take_count = i+1;
+                } else {
+                    break;
+                }
+            }
 
-            // }
-            let part_sub_slice: Vec<_> = partition_subtractions.iter()
-                .take_while(|(sub, _)| &ticket.get_index() >= sub)
-                .collect();
-            // dbg!(partition_subtraction_take_count);
-            // dbg!(part_sub_slice.len());
-
-            
-            // let part_sub_slice = &partition_subtractions[0..partition_subtraction_take_count];
-            let part_valid = partition_counts.get_all_valid();
+            let index_sub_slice = &index_subtractions[0..index_subtraction_take_count];
+            let part_valid = partition_count_table.get_all_valid();
             let mut partial_sum = Integer::new();
 
-            for (sub_amount, add_or_sub) in part_sub_slice.iter().rev() {
+            for (sub_amount, add_or_sub) in index_sub_slice.iter().rev() {
                 let get_index = ticket.get_index() - sub_amount;
                 let int: &Integer = match part_valid.get(get_index) {
                     Some(int) => int.as_ref().unwrap(),
                     None => {
                         loop {
-                            match partition_counts.get(get_index) {
+                            match partition_count_table.get(get_index) {
                                 Some(int) => break int,
                                 None => {},
                             }
@@ -157,5 +153,5 @@ pub fn calc_partition_count_parallel(n: usize) -> Integer {
     // for (i, e) in l.iter().enumerate() {
     //     println!("{}: {}", i, e.as_ref().unwrap());
     // }
-    partition_counts.get(n).as_ref().expect("didn't calculate up to n somehow").clone()
+    partition_count_table.get(n).as_ref().expect("didn't calculate up to n somehow").clone()
 }
