@@ -9,7 +9,10 @@ use bigint::BigInt;
 use multithreaded::*;
 use util::*;
 
-use std::sync::Arc;
+use std::{
+    sync::{mpsc, Arc},
+    thread,
+};
 use threadpool::ThreadPool;
 
 pub fn calc_partition_count(n: usize) -> BigInt {
@@ -44,6 +47,78 @@ pub fn calc_partition_count(n: usize) -> BigInt {
 }
 
 pub fn calc_partition_count_parallel(n: usize, num_threads: usize) -> BigInt {
+    let index_subtractions = Arc::new(generate_index_subtractions(n));
+    let partition_count_table = Arc::new(ParallelTable::new(n));
+
+    let mut sender_pool: Vec<mpsc::Sender<ParallelTableMutIndexTicket>> = vec![];
+    let mut thread_handles = vec![];
+    for _ in 0..num_threads {
+        let (sender, receiver) = mpsc::channel();
+        sender_pool.push(sender);
+        let partition_count_table = partition_count_table.clone();
+        let index_subtractions = index_subtractions.clone();
+
+        let handle = thread::spawn(move || {
+            while let Ok(ticket) = receiver.recv() {
+                let mut index_subtraction_take_count = 2;
+                for (i, (sub_amt, _)) in index_subtractions.iter().enumerate().skip(2) {
+                    if ticket.get_index() >= *sub_amt {
+                        index_subtraction_take_count = i + 1;
+                    } else {
+                        break;
+                    }
+                }
+
+                let index_sub_slice = &index_subtractions[0..index_subtraction_take_count];
+                let part_valid = partition_count_table.get_all_valid();
+                let mut partial_sum = BigInt::from(0);
+
+                for (sub_amount, add_or_sub) in index_sub_slice.iter().rev() {
+                    let get_index = ticket.get_index() - sub_amount;
+                    let int: &BigInt = match part_valid.get(get_index) {
+                        Some(int) => int.as_ref().unwrap(),
+                        None => loop {
+                            match partition_count_table.get(get_index) {
+                                Some(int) => break int,
+                                None => {}
+                            }
+                        },
+                    };
+                    match add_or_sub {
+                        AddOrSub::Add => partial_sum += int,
+                        AddOrSub::Sub => partial_sum -= int,
+                    }
+                }
+                ticket.set(partial_sum);
+            }
+        });
+        thread_handles.push(handle);
+    }
+
+    let table_mut_tickets = generate_tickets(partition_count_table.clone()).unwrap();
+
+    for (ticket, sender) in table_mut_tickets
+        .into_iter()
+        .zip(sender_pool.iter().cycle())
+    {
+        sender.send(ticket).expect("Thread ded :(");
+    }
+
+    drop(sender_pool);
+
+    for handle in thread_handles {
+        handle.join().expect("thread died unexpectedly :(");
+    }
+
+    partition_count_table
+        .get(n)
+        .as_ref()
+        .expect("didn't calculate up to n somehow")
+        .clone()
+}
+
+/// This method is slower, but kept because of history
+pub fn calc_partition_count_parallel_threadpool(n: usize, num_threads: usize) -> BigInt {
     let index_subtractions = Arc::new(generate_index_subtractions(n));
     let partition_count_table = Arc::new(ParallelTable::new(n));
 

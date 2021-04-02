@@ -8,19 +8,25 @@ use daily_programmer_386::*;
 fn main() {
     let target_n = 666_666;
 
-    let start = Instant::now();
-    let answer = calc_partition_count(target_n);
-    let elapsed = start.elapsed();
-    println!("serial    {:?}", elapsed);
-    println!("serial:   {:?}", answer);
+    // let start = Instant::now();
+    // let answer = calc_partition_count(target_n);
+    // let elapsed = start.elapsed();
+    // println!("serial    {:?}", elapsed);
+    // println!("serial:   {:?}", answer);
+
+    let num_threads = 18;
 
     let start = Instant::now();
-    // let num_threads = num_cpus::get();
-    let num_threads = 8;
     let answer_parallel = calc_partition_count_parallel(target_n, num_threads);
     let elapsed = start.elapsed();
-    println!("parallel  {:?}", elapsed);
-    println!("parallel: {:?}", answer_parallel);
+    println!("manual  {:?}", elapsed);
+    println!("manual: {:?}", answer_parallel);
+
+    let start = Instant::now();
+    let answer_parallel = calc_partition_count_parallel_threadpool(target_n, num_threads);
+    let elapsed = start.elapsed();
+    println!("threadpool  {:?}", elapsed);
+    println!("threadpool: {:?}", answer_parallel);
 }
 
 #[cfg(test)]
