@@ -104,6 +104,8 @@ pub fn calc_partition_count_parallel(n: usize, num_threads: usize) -> BigInt {
         sender.send(ticket).expect("Thread ded :(");
     }
 
+    // we must drop the sender pool or else none of the threads will ever finish
+    // as they will be blocked waiting for another message from the mpsc
     drop(sender_pool);
 
     for handle in thread_handles {
