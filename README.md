@@ -33,14 +33,20 @@ $ cargo build --release
 $ cargo run --release
 ```
 
-If you want to switch between the multithreaded and single threaded versions of the code, you will need to manually comment/uncomment the relevant function calls in the main function in `main.rs`
+There are also feature settings in `Cargo.toml` to switch out the "Big Integer" implementation. `rug` is the fastest true BigInt type, but `p(666)` is small enough to fit inside a `i128`, which is even faster.
 
 # Speed
-My testing machine has a relatively old 4 core cpu at 3.6 GHz.
+Informal speed results, all calculating `p(666_666)`
 
-Single Threaded: `p(666,666)` takes about 65 seconds
+| CPU | Singlethreaded | 4 threads | 12 threads |
+| --- | --- | --- | --- |
+| i5 i4590 | 65 seconds | 18 seconds |  |
+| r9 ryzen 3900x | 30 seconds | 10 seconds | 4.5 seconds |
 
-Multithreaded: `p(666,666)` takes about 18 seconds
+After about 12 threads, the runtime doesn't significantly improve for `p(666_666)`.
+
+There are some potential speedups in the multithreaded code by gradually ramping up the number of threads used, in particular for example the single threaded case always beats the multithreaded for `p(666)`,
+so only using 1 thread up to a certain value, then adding more as the numbers get larger would likely get some performance boost, assuming the values chosen for adding threads are well picked.
 
 ## License
 [MIT](https://choosealicense.com/licenses/mit/)

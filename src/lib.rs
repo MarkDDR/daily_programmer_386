@@ -76,7 +76,7 @@ pub fn calc_partition_count_parallel(n: usize, num_threads: usize) -> BigInt {
                         None => loop {
                             match partition_count_table.get(get_index) {
                                 Some(int) => break int,
-                                None => {}
+                                None => hint::spin_loop(),
                             }
                         },
                     };

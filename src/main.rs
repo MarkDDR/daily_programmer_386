@@ -8,6 +8,7 @@ use daily_programmer_386::*;
 fn main() {
     let target_n = 666_666;
     println!("Calculating {}\n", target_n);
+    let true_answer: crate::bigint::BigInt = ANSWER_666666.parse().unwrap();
 
     let width = 12;
 
@@ -16,19 +17,34 @@ fn main() {
     let answer = calc_partition_count(target_n);
     let elapsed = start.elapsed();
     println!("{:width$} {:?}", prefix, elapsed, width = width);
-    println!("{:width$} {:?}", prefix, answer, width = width);
+    assert_eq!(true_answer, answer, "The numbers didn't match D:");
+
     println!();
 
     let num_threads = 12;
 
-    let prefix = "parallel";
+    let prefix = format!("parallel {:02}", num_threads);
     let start = Instant::now();
     let answer_parallel = calc_partition_count_parallel(target_n, num_threads);
     let elapsed = start.elapsed();
     println!("{:width$} {:?}", prefix, elapsed, width = width);
-    println!("{:width$} {:?}", prefix, answer_parallel, width = width);
+    assert_eq!(true_answer, answer_parallel, "The numbers didn't match D:");
+    // println!("{:width$} {:?}", prefix, answer_parallel, width = width);
     // println!();
 }
+
+const ANSWER_666666: &str = "82988204725057268470089990261324378276360276281620\
+1701722599315815312910790359761069230836156205082863018110775536469855308986200\
+0731442486629159021107871890767548744981563757815604738193831935702672342940081\
+1440786243537473889613789501179860271205636766685556083839284871356467505472932\
+9398073507378373208972509842880751022273604950120819819461244250221006793015786\
+7203009814706076130473690071075547021163614324905624193405855948355599300631813\
+0882354490793855633514786018860641508968599291753911710658821984824827014879253\
+2079530603636993578091236835691954161244027792120896238596848636567612717269000\
+7842504280069247466174500335672400845138118174848452879574540446797810703795044\
+3578207396880201632718267240214781649888665835052129794930921847857093479519752\
+3632953503835428280916586305632528116828229355871664575877094278615695592039186\
+556142662054263695788587794970386821424021653983372333685780633";
 
 // #[cfg(test)]
 // mod tests {

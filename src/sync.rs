@@ -1,5 +1,6 @@
 #[cfg(not(loom))]
 pub(crate) use std::{
+    hint,
     sync::{
         atomic::{AtomicBool, AtomicUsize, Ordering},
         mpsc, Arc,
@@ -9,6 +10,7 @@ pub(crate) use std::{
 
 #[cfg(loom)]
 pub(crate) use loom::{
+    hint,
     sync::{
         atomic::{AtomicBool, AtomicUsize, Ordering},
         mpsc, Arc,

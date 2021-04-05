@@ -5,7 +5,8 @@ fn test_parallel_calc() {
     use daily_programmer_386::{bigint::BigInt, calc_partition_count_parallel};
     loom::model(|| {
         let true_answer: BigInt = ANSWER_666.parse().unwrap();
-        let parallel_answer = calc_partition_count_parallel(666, 2);
+        let num_threads = 3;
+        let parallel_answer = calc_partition_count_parallel(666, num_threads);
         assert_eq!(parallel_answer, true_answer);
     });
 }
