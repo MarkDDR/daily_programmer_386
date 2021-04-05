@@ -40,13 +40,13 @@ Informal speed results, all calculating `p(666_666)`
 
 | CPU | Singlethreaded | 4 threads | 12 threads |
 | --- | --- | --- | --- |
-| i5 i4590 | 65 seconds | 18 seconds |  |
+| i5 4590 | 65 seconds | 18 seconds |  |
 | r9 ryzen 3900x | 30 seconds | 10 seconds | 4.5 seconds |
 
 After about 12 threads, the runtime doesn't significantly improve for `p(666_666)`.
 
-There are some potential speedups in the multithreaded code by gradually ramping up the number of threads used, in particular for example the single threaded case always beats the multithreaded for `p(666)`,
-so only using 1 thread up to a certain value, then adding more as the numbers get larger would likely get some performance boost, assuming the values chosen for adding threads are well picked.
+There are some potential speedups in the multithreaded code by gradually ramping up the number of threads used, for example the single threaded case always beats the multithreaded for `p(666)`,
+so only using 1 thread up to a certain value, then adding more threads as the numbers get larger, would likely get some performance boost, assuming the values chosen for adding threads are well picked.
 
 ## License
 [MIT](https://choosealicense.com/licenses/mit/)
